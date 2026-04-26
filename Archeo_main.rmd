@@ -1,0 +1,545 @@
+
+#======================================================================================================
+Causal relationships among ecology, subsistence strategies, and social organization in prehistoric farming societies: A Bayesian network approach
+
+Rosy Oh and Man-Suk Oh
+
+Apr 26, 2026
+
+#======================================================================================================
+
+
+#Install and load necessary packages
+```{r}
+# ── Bioconductor packages (not available on CRAN) ──────────────────────────────
+bioc_req <- c("graph", "RBGL", "Rgraphviz")
+bioc_missing <- setdiff(bioc_req, rownames(installed.packages()))
+if (length(bioc_missing) > 0) {
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+  BiocManager::install(bioc_missing)
+}
+
+# ── CRAN packages ───────────────────────────────────────────────────────────
+cran_req <- c(
+  "readxl",   # read data
+  "pcalg",    # PC algorithm-based causal discovery
+  "igraph",   # graph_from_adjacency_matrix
+  "bnlearn",  # Bayesian network learning
+  "micd",     # mixCItest: conditional independence test for mixed data
+  "tpc",      # tpc() algorithm
+  "nnet",     # multinom(): multinomial logistic regression
+  "dplyr",
+  "tidyverse",
+  "GGally",
+  "httr"
+)
+cran_missing <- setdiff(cran_req, rownames(installed.packages()))
+if (length(cran_missing) > 0)
+  install.packages(cran_missing, repos = "https://cloud.r-project.org")
+
+# ── Load packages ───────────────────────────────────────────────────────────
+suppressPackageStartupMessages({
+  library(readxl)
+  library(pcalg)
+  library(igraph)
+  library(Rgraphviz)
+  library(bnlearn)
+  library(micd)
+  library(tpc)
+  library(nnet)
+  library(dplyr)
+  library(tidyverse)
+  library(GGally)
+  library(httr)
+})
+```
+
+
+
+# read data and pre-procssing 
+```{r}
+# ──read original data ─────────────────────────────────────────────────────────────
+# Download file from PLOS ONE (Palacios et al. 2022))
+url <- "https://doi.org/10.1371/journal.pone.0276088.s006"
+tmp <- tempfile(fileext = ".xlsx")
+GET(url, write_disk(tmp, overwrite = TRUE), follow_redirects = TRUE)
+
+# Read with skip=1 to bypass the merged category header row
+dat.raw0 <- read_excel(tmp,skip = 1)
+
+# Fix the first two unnamed columns
+colnames(dat.raw0)[1:2] <- c("Society", "Region")
+
+# ──Remove Lepcha (erroneous 'A' code in Animal husbandry) ──────────────────────────
+dat.raw <- dat.raw0[dat.raw0$Society!="Lepcha", ]
+
+# ──rename variables  ────────────────────────────────────────────────────
+names <- c(  "Society", "Region",  "Landscape",  "DistanceCoast", "Elevation", "Slope",
+  "AnnualTemp", "cv.AnnualTemp",  "MonthlyPrecip", "cv.MonthlyPrecip",  "MonthlyPrimaryprod", "cv.MonthlyPrimaryprod",  "Hunting", "Gathering", "AnimalHusbandry", "Fishing", "Agriculture",
+  "CommSize", "SettlementType", "CommOrg", "HouseholdOrg",  "None",
+  "ResourceDiversification", "CropSpecialisation", "ForagingIntensification",
+  "Storage", "Transhumance", "TemporalMigration", "PermanentMigration",
+  "ExchangeOutSettlement", "ExchangeInSettlement", "Reciprocity"
+)
+
+colnames(dat.raw)= names
+
+
+#─── remove  "None", cv variables, Society, Soc Decision variables───────────────────────
+dat.raw <- dat.raw %>%
+  select(
+    -any_of("None"),                          # remove "None" variable
+    -starts_with("cv."),                      # remove variables starting with "cv."
+    -all_of(names(dat.raw)[c(1:3,22:ncol(dat.raw))]) # remove Society, Soc Decision variables
+  )
+
+dim(dat.raw)
+colnames(dat.raw)
+
+#define Ecology, Subsistence, SocialOrg variables
+Ecology=names(dat.raw)[1:6]
+Subsistence=names(dat.raw)[7:11]
+SocialOrg=names(dat.raw)[12:15]
+
+
+#──── convert Ecology as numeric ─────────────────────────────────────────────────────────
+dat.raw[, Ecology] <- lapply(dat.raw[, Ecology], 
+                              function(x) suppressWarnings(as.numeric(x))) 
+summary(dat.raw)
+
+#───── convert Subsistence (interval) to score (numeric)───────────────────
+dat.score=dat.raw
+
+map <- c(  "0-5" = 2.5,  "6-15" = 10.5,  "16-25" = 20.5,"26-35" = 30.5,  "36-45" = 40.5,
+  "46-55" = 50.5,  "56-65" = 60.5,  "66-75" = 70.5,  "76-85" = 80.5,  "86-100" = 93)
+
+dat.score[,  Subsistence] <- lapply(dat.score[,  Subsistence], function(x) {
+  x <- trimws(as.character(x))          # handle potential factor/whitespace
+  out <- unname(map[x])                # mapping (NA if no match)
+  as.numeric(out)
+})
+
+
+# SocialOrg
+#────── convert CommSize(interval)  to score ──────────────────────────────────────
+map_cs <- c(
+  "<50"      = 25,
+  "50-99"    = 75,
+  "100-199"  = 150,
+  "200-399"  = 300,
+  ">400"     = 450
+)
+
+dat.score$CommSize <- trimws(as.character(dat.score$CommSize))
+dat.score$CommSize <- unname(map_cs[dat.score$CommSize])
+dat.score$CommSize <- as.numeric(dat.score$CommSize)
+
+#───────── factorize categorical SocialOrg valriables ────────────────────────────────────
+sub_SocialOrg <- setdiff(SocialOrg, "CommSize")
+dat.score[, sub_SocialOrg] <- lapply(dat.score[, sub_SocialOrg], function(x) {
+  x <- na_if(trimws(as.character(x)), "NA")  # string "NA" → true NA
+  as.factor(x)
+})
+
+#───────── remove obs with missing values ──────────────────────────────────────────────────────
+id_na <- which(rowSums(is.na(dat.score)) > 0)
+dat.score <- dat.score %>% drop_na() %>% data.frame()
+dim(dat.score) 
+
+#write.csv(dat.score, file="data/dat_score.csv", row.names = F)
+#dat.score=read.csv("data/dat_score.csv")
+
+```
+
+
+#Normalize and standardize (mean=0, sd=1) continuous variables 
+```{r}
+#Normalize
+source("fn_normalize.r")
+cols.conti <- which(sapply(dat.score, is.numeric))
+res <- normalize(dat.score, cols.conti)
+#res$summary     
+dat.trans=res$dat_trans   # transformed data
+
+# standardize
+dat.trans[, cols.conti] <- scale(dat.trans[, cols.conti])
+
+#cor_mat <- cor(dat.trans[, cols.conti], use = "pairwise.complete.obs", method = "pearson")
+
+```
+
+
+
+# blacklist
+```{r}
+
+# prepare 
+forb_all <- matrix(FALSE, nrow=ncol(dat.trans), ncol=ncol(dat.trans))
+rownames(forb_all) <- colnames(forb_all) <- names(dat.trans)
+
+# ──main structure───────────────────────────────────────────────────────
+# Allow Ecology -> Subsistence -> SocialOrg,  not the reverse
+
+  forb_all[Subsistence, Ecology] <- TRUE
+  forb_all[SocialOrg, Ecology] <- TRUE
+  forb_all[SocialOrg, Subsistence] <- TRUE
+  
+# ──within Ecology───────────────────────────────────────────────────────  
+# Geography -> Topography -> Climate -> Productivity, not the reverse 
+  
+  Geography <- c("DistanceCoast", "Elevation")
+  Topography <- c("Slope")
+  Climate <- c("AnnualTemp",  "MonthlyPrecip"  )
+  Productivity <- c("MonthlyPrimaryprod" )
+
+  forb_all["DistanceCoast", "Elevation"] <- TRUE
+  forb_all["Elevation", "DistanceCoast"] <- TRUE
+  forb_all[Topography, Geography] <- TRUE
+  forb_all[Climate, Geography] <- TRUE
+  forb_all[Climate, Topography] <- TRUE
+  forb_all[Productivity, Geography] <- TRUE
+  forb_all[Productivity, Topography] <- TRUE
+  forb_all[Productivity, Climate] <- TRUE
+  
+# ──within Subsistence───────────────────────────────────────────────────────  
+# Agriculture -> AnimalHusbandry -> {Hunting",  "Fishing} -> Gathering, not the reverse 
+  
+   forb_all["AnimalHusbandry", "Agriculture"] <- TRUE
+   forb_all[c("Hunting",  "Fishing",  "Gathering" ),c( "Agriculture", "AnimalHusbandry")] <- TRUE
+   forb_all["Gathering", c("Hunting", "Fishing" )]    <- TRUE     
+
+# Select only analysis variables (Ecology + Subsistence + SocialOrg)
+# and subset blacklist matrix to match dimensions and order of dat exactly
+ cols <- c(Ecology, Subsistence, SocialOrg)
+ dat  <- dat.trans %>% select(all_of(cols))
+ forb <- forb_all[cols, cols]
+
+```
+
+
+#Leran Bayesian Network Structure using bagging
+```{r}
+
+# Fit a single BN to one bootstrap sample using the tpc() algorithm
+# (a parallel, stable version of the PC algorithm for mixed data)
+fit_one <- function(dat_sub, forb, alpha_level, numCores) {
+  fit <- tpc(
+    suffStat    = dat_sub,
+    indepTest   = mixCItest,      # mixed CI test for continuous + categorical
+    labels      = names(dat_sub),
+    alpha       = alpha_level,    # significance level for conditional independence tests
+    forbEdges   = forb,           # blacklist matrix encoding domain constraints
+    maj.rule    = TRUE,           # use majority rule for edge orientation
+    skel.method = "stable.parallel",
+    numCores    = 4
+  )
+  return(fit)
+}
+
+# ── Bootstrap settings ───────────────────────────────────────────────────────
+seed=4026
+dat <- dat.trans
+B   <- 50                       # number of bootstrap replicates
+p   <- ncol(dat)
+vn  <- names(dat)
+
+# Storage: only successfully learned DAGs (cycle-free networks) are kept
+boot_nets        <- list()
+successful_boots <- 0
+skipped_boots    <- c()           # indices of replicates that produced cycles
+
+# ── Main bootstrap loop ──────────────────────────────────────────────────────
+for (b in 1:B) {
+  # Draw 80% of observations with replacement
+  idx <- sample.int(nrow(dat), size = floor(0.8 * nrow(dat)), replace = TRUE)
+  fit <- fit_one(dat[idx, ], forb = forb, alpha_level = 0.1, numCores = numCores)
+
+  # Convert to bn object; skip if tpc() produced a cyclic graph
+  tryCatch({
+    g                <- as.bn(fit, check.cycles = TRUE)
+    successful_boots <- successful_boots + 1
+    boot_nets[[successful_boots]] <- g
+  }, error = function(e) {
+    cat("Bootstrap", b, "skipped: contains cycles\n")
+    skipped_boots <<- c(skipped_boots, b)  
+  })
+}
+cat(sprintf("Completed: %d/%d replicates accepted (%d skipped)\n",
+            successful_boots, B, length(skipped_boots)))
+
+# ── Arc strength calculation ─────────────────────────────────────────────────
+source("fn_calculate_arc_strength.r")
+arc_strength <- calculate_arc_strength(boot_nets, vn)
+
+summary(arc_strength$strength) #strength and direction should both be in [0, 1]
+
+# ── Arc selection ────────────────────────────────────────────────────────────
+# Retain arcs appearing in >= 30% of replicates with consistent direction (>= 50%)
+threshold     <- 0.3
+selected_arcs <- arc_strength[
+  arc_strength$strength  >= threshold &
+  arc_strength$direction >= 0.5, ]
+print(selected_arcs)
+
+# write.csv(arc_strength, "data/arc_strength_direction.csv", row.names = FALSE)
+```
+# Construct consensus DAG from selected arcs 
+```{r}
+# Initialise an empty graph on all nodes
+avg_graph <- empty.graph(vn)
+
+# Add selected arcs one by one, skipping any that would create a cycle
+for (k in 1:nrow(selected_arcs)) {
+  test_graph <- set.arc(avg_graph,
+                        from         = as.character(selected_arcs$from[k]),
+                        to           = as.character(selected_arcs$to[k]),
+                        check.cycles = TRUE)
+  
+  if (acyclic(test_graph, directed = TRUE)) {
+    avg_graph <- test_graph
+  } else {
+    message("Skipped arc: ", selected_arcs$from[k], " -> ",
+            selected_arcs$to[k], " (would create cycle)")
+  }
+}
+
+# Remove isolated nodes (retain only nodes involved in at least one arc)
+connected_nodes <- unique(c(arcs(avg_graph)[, "from"], arcs(avg_graph)[, "to"]))
+avg_graph <- subgraph(avg_graph, connected_nodes)
+cat("Number of arcs in consensus DAG:", narcs(avg_graph), "\n")
+
+# Save / reload consensus DAG (uncomment reload line as needed)
+saveRDS(avg_graph, file = "avg_graph.rds", compress = TRUE)
+# avg_graph <- readRDS("avg_graph.rds")
+
+# ── Plot consensus DAG ───────────────────────────────────────────────────────
+
+gR <- graphviz.plot(avg_graph, shape = "rectangle")
+
+# ── Node appearance ──────────────────────────────────────────────────────────
+node.attrs <- nodeRenderInfo(gR)
+arc.attrs  <- edgeRenderInfo(gR)
+
+# Global node style
+node.attrs$col     <- "black"
+node.attrs$textCol <- "black"
+node.attrs$fontsize <- 14
+
+# Node fill colours by variable group
+node.attrs$fill[c(Geography, Topography)] <- "lightgray"    # ecological geography
+node.attrs$fill[Climate]                  <- "lightyellow"  # climate
+node.attrs$fill[Productivity]             <- "lightyellow"  # primary productivity
+node.attrs$fill[Subsistence]              <- "lightgreen"   # subsistence strategies
+node.attrs$fill[SocialOrg]               <- "lightblue"    # social organisation
+
+nodeRenderInfo(gR) <- node.attrs
+
+# ── Arc appearance ───────────────────────────────────────────────────────────
+# Arcs with direction < 0.60: dashed (weak directional consensus)
+# Arcs with direction >= 0.60: solid  (strong directional consensus)
+all_arc_names <- names(arc.attrs$lty)
+
+for (k in 1:nrow(selected_arcs)) {
+  arc_name <- paste0(selected_arcs$from[k], "~", selected_arcs$to[k])
+  
+  if (arc_name %in% all_arc_names) {
+    arc.attrs$col[arc_name] <- "black"
+    arc.attrs$lty[arc_name] <- ifelse(selected_arcs$direction[k] < 0.60,
+                                      "dashed", "solid")
+  }
+}
+
+edgeRenderInfo(gR) <- arc.attrs
+renderGraph(gR)
+
+# ── Save plots ───────────────────────────────────────────────────────────────
+# File names encode the strength threshold (e.g., threshold=0.3 -> "BN_thr3")
+filename <- paste0("figures/BN_thr", as.integer(threshold * 10))
+
+png(paste0(filename, ".png"), res = 300, width = 15, height = 10,
+    units = "cm", bg = "transparent")
+renderGraph(gR)
+dev.off()
+
+pdf(paste0(filename, ".pdf"))
+renderGraph(gR)
+dev.off()
+```
+
+
+
+#  Model fitting: estimate local distributions for each node 
+```{r}
+
+# Mixed-variable BN: continuous nodes use Gaussian regression,
+# discrete nodes use multinomial logistic regression (via nnet::multinom).
+# The resulting fitted_list stores one fitted model per node.
+
+fitted_list <- list()
+
+# Identify discrete and continuous nodes present in the consensus DAG
+discrete_vars   <- intersect(c("SettlementType", "CommOrg", "HouseholdOrg"),
+                             nodes(avg_graph))
+continuous_nodes <- setdiff(nodes(avg_graph), discrete_vars)
+
+# ── Continuous nodes: Gaussian conditional distributions ────────────────────
+for (node in continuous_nodes) {
+  parents <- parents(avg_graph, node)
+  
+  if (length(parents) == 0) {
+    # Root node (no parents): store unconditional mean and SD
+    fitted_list[[node]] <- list(
+      coef = mean(dat[[node]]),
+      sd   = sd(dat[[node]])
+    )
+  } else {
+    # Non-root node: fit linear regression on parent nodes
+    formula_str        <- paste(node, "~", paste(parents, collapse = " + "))
+    fitted_list[[node]] <- lm(as.formula(formula_str), data = dat)
+  }
+}
+
+# ── Discrete nodes: multinomial logistic regression ──────────────────────────
+# nnet::multinom() handles both purely discrete and mixed (continuous) parents
+library(nnet)
+
+for (node in discrete_vars) {
+  parents <- parents(avg_graph, node)
+  
+  if (length(parents) == 0) {
+    # Root node: store empirical marginal distribution
+    fitted_list[[node]] <- table(dat[[node]]) / nrow(dat)
+  } else {
+    # Non-root node: fit multinomial logistic regression on parent nodes
+    formula_str        <- paste(node, "~", paste(parents, collapse = " + "))
+    fitted_list[[node]] <- multinom(as.formula(formula_str),
+                                    data  = dat,
+                                    trace = FALSE)   # suppress iteration output
+  }
+}
+```
+
+
+
+#  Interventional analysis (do-calculus via Monte Carlo simulation)
+```{r}
+# ── source necessary functions ────────────────────────────────────────────────────
+
+source("fn_simulate_all_Y_interventions.r")
+#Functions defined in this file: 
+#   simulate_all_Y_interventions() : generate simulations for multiple Y interventions (all at once)
+#   simulate_doY_region() : Simulate the joint distribution of all nodes under a specified intervention 
+#   draw_Y_empirical(): Sample n values of Y from the observed data under a specified intervention
+
+
+source("fn_interventional_analysis_ci.r")
+#Functions defined in this file: 
+#   compute_interventional_analysis_ci(): main wrapper ; computes interventional prob for all X-Y pairs
+#   compute_interventional_prob_with_ci() : P(X | do(Y)) and 95% CI when Y is continuous
+#   compute_interventional_prob_with_ci_categorical_Y(): P(X | do(Y = k)) and 95% CI when Y is categorical
+#   create_results_table()    : organises results into two data frames (continuous Y / categorical Y)
+#   plot_ratio(): Plot interventional probability ratios as grouped bar charts 
+
+
+# ── Define intervention variables (X) and ancestor variables (Y) ─────────────
+
+Subsistence <- c("Hunting", "Gathering", "AnimalHusbandry", "Fishing", "Agriculture")
+SocialOrg   <- c("CommSize", "SettlementType", "CommOrg", "HouseholdOrg")
+
+# Retain only X variables that are present in the consensus DAG
+X_vars <- intersect(c(Subsistence, SocialOrg), nodes(avg_graph))
+
+# Y variables: all ancestors of X variables in the DAG (i.e., upstream causes)
+all_ancestors <- unique(unlist(lapply(X_vars, function(x) {
+  bnlearn::ancestors(avg_graph, x)
+})))
+
+# exclude X variables that are included in all_ancestors;
+all_ancestors <- setdiff(all_ancestors, X_vars)
+
+Y_vars <- all_ancestors
+
+
+# ── Simulate interventional dist of  X | do(Y = y) ──────────────────────────
+
+## For each Y: intervene at above/below median (continuous) or at each factor level (discrete)
+ay_list <- setNames(
+  lapply(all_ancestors, function(y) {
+    if (is.numeric(dat[[y]])) {
+      median(dat[[y]], na.rm = TRUE)   # continuous Y: do(Y > median) vs do(Y <= median)
+    } else {
+      levels(dat[[y]])                 # # discrete Y: do(Y = k) for each category k
+    }
+  }),
+  all_ancestors
+)
+
+
+
+sim_results <- simulate_all_Y_interventions(
+  fitted_list = fitted_list,
+  avg_graph   = avg_graph,
+  dat         = dat,
+  Y_vars      = all_ancestors,
+  ay_list     = ay_list,
+  n           = 1e5                    # number of Monte Carlo samples
+)
+
+# saveRDS(sim_results, file = "sim_results.rds", compress = TRUE)
+# sim_results <- readRDS("sim_results.rds")
+
+
+# ── Compute interventional ratios and confidence intervals ────────────────────────────
+
+# For each X: intervene at above/below median (continuous) or all factor levels (discrete)
+ax_list <- setNames(
+  lapply(X_vars, function(x) {
+    if (is.numeric(dat[[x]])) {
+      median(dat[[x]], na.rm = TRUE)
+    } else {
+      levels(dat[[x]])
+    }
+  }),
+  X_vars
+)
+
+
+results <- compute_interventional_analysis_ci(
+  sim_results = sim_results,
+  avg_graph   = avg_graph,
+  dat         = dat,
+  X_vars      = X_vars,
+  ax_list     = ax_list     # if NULL, median of each X is used by default
+)
+
+results_tables <- create_results_table(results, digits = 3)
+
+# ── Save interventional results ───────────────────────────────────────────────
+if (!is.null(results_tables$continuous_Y)) {
+  write.csv(results_tables$continuous_Y,
+            "data/interventional_results_continuous_Y.csv", row.names = FALSE)
+}
+if (!is.null(results_tables$categorical_Y)) {
+  write.csv(results_tables$categorical_Y,
+            "data/interventional_results_categorical_Y.csv", row.names = FALSE)
+}
+
+# ── Plot interventional probability ratios ───────────────────────────────────
+
+# Label each arc as increasing or decreasing effect based on ratio > 1
+results_tables$continuous_Y$ratio_ind <- ifelse(
+  results_tables$continuous_Y$ratio > 1, "Increase", "Decrease"
+)
+
+# Retain only Subsistence and SocialOrg variables present in the results,
+# preserving the desired display order for the plot
+desired_order          <- c("Agriculture", "Fishing", "AnimalHusbandry", "Hunting", "Gathering")
+Subsistence_in_network <- desired_order[desired_order %in%
+                            intersect(results_tables$continuous_Y$X, Subsistence)]
+SocialOrg_in_network   <- intersect(results_tables$continuous_Y$X, SocialOrg)
+
+plot_ratio(results_tables$continuous_Y, Subsistence_in_network, SocialOrg_in_network)
+
+```
+
+
