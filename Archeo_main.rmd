@@ -146,7 +146,7 @@ id_na <- which(rowSums(is.na(dat.score)) > 0)
 dat.score <- dat.score %>% drop_na() %>% data.frame()
 dim(dat.score) 
 
-#write.csv(dat.score, file="data/dat_score.csv", row.names = F)
+write.csv(dat.score, file="data/dat_score.csv", row.names = F)
 #dat.score=read.csv("data/dat_score.csv")
 
 ```
@@ -237,11 +237,12 @@ fit_one <- function(dat_sub, forb, alpha_level, numCores) {
 }
 
 # ── Bootstrap settings ───────────────────────────────────────────────────────
-seed=4026
+set.seed(4026)
 dat <- dat.trans
-B   <- 50                       # number of bootstrap replicates
+B   <- 1000             # number of bootstrap replicates
 p   <- ncol(dat)
 vn  <- names(dat)
+numCores=4
 
 # Storage: only successfully learned DAGs (cycle-free networks) are kept
 boot_nets        <- list()
@@ -252,7 +253,12 @@ skipped_boots    <- c()           # indices of replicates that produced cycles
 for (b in 1:B) {
   # Draw 80% of observations with replacement
   idx <- sample.int(nrow(dat), size = floor(0.8 * nrow(dat)), replace = TRUE)
-  fit <- fit_one(dat[idx, ], forb = forb, alpha_level = 0.1, numCores = numCores)
+  
+  # Suppress near-singular covariance warnings from mixCItest() internals
+  fit <- suppressWarnings(
+    fit_one(dat[idx, ], forb = forb, alpha_level = 0.1, numCores = numCores)
+  )
+  
 
   # Convert to bn object; skip if tpc() produced a cyclic graph
   tryCatch({
@@ -281,8 +287,10 @@ selected_arcs <- arc_strength[
   arc_strength$direction >= 0.5, ]
 print(selected_arcs)
 
-# write.csv(arc_strength, "data/arc_strength_direction.csv", row.names = FALSE)
+ write.csv(arc_strength, "data/arc_strength_direction.csv", row.names = FALSE)
 ```
+
+
 # Construct consensus DAG from selected arcs 
 ```{r}
 # Initialise an empty graph on all nodes
@@ -454,8 +462,10 @@ all_ancestors <- unique(unlist(lapply(X_vars, function(x) {
   bnlearn::ancestors(avg_graph, x)
 })))
 
+
+
 # exclude X variables that are included in all_ancestors;
-all_ancestors <- setdiff(all_ancestors, X_vars)
+#all_ancestors <- setdiff(all_ancestors, X_vars)
 
 Y_vars <- all_ancestors
 
@@ -485,7 +495,7 @@ sim_results <- simulate_all_Y_interventions(
   n           = 1e5                    # number of Monte Carlo samples
 )
 
-# saveRDS(sim_results, file = "sim_results.rds", compress = TRUE)
+saveRDS(sim_results, file = "sim_results.rds", compress = TRUE)
 # sim_results <- readRDS("sim_results.rds")
 
 
