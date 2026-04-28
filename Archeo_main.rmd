@@ -239,7 +239,7 @@ fit_one <- function(dat_sub, forb, alpha_level, numCores) {
 # ── Bootstrap settings ───────────────────────────────────────────────────────
 set.seed(4026)
 dat <- dat.trans
-B   <- 1000             # number of bootstrap replicates
+B   <- 2000             # number of bootstrap replicates
 p   <- ncol(dat)
 vn  <- names(dat)
 numCores=4
@@ -281,7 +281,7 @@ summary(arc_strength$strength) #strength and direction should both be in [0, 1]
 
 # ── Arc selection ────────────────────────────────────────────────────────────
 # Retain arcs appearing in >= 30% of replicates with consistent direction (>= 50%)
-threshold     <- 0.3
+threshold     <- 0.2
 selected_arcs <- arc_strength[
   arc_strength$strength  >= threshold &
   arc_strength$direction >= 0.5, ]
@@ -318,7 +318,7 @@ cat("Number of arcs in consensus DAG:", narcs(avg_graph), "\n")
 
 # Save / reload consensus DAG (uncomment reload line as needed)
 saveRDS(avg_graph, file = "avg_graph.rds", compress = TRUE)
-# avg_graph <- readRDS("avg_graph.rds")
+ avg_graph <- readRDS("avg_graph.rds")
 
 # ── Plot consensus DAG ───────────────────────────────────────────────────────
 
@@ -361,7 +361,7 @@ edgeRenderInfo(gR) <- arc.attrs
 renderGraph(gR)
 
 # ── Save plots ───────────────────────────────────────────────────────────────
-# File names encode the strength threshold (e.g., threshold=0.3 -> "BN_thr3")
+# File names encode the strength threshold (e.g., threshold=0.2 -> "BN_thr2")
 filename <- paste0("figures/BN_thr", as.integer(threshold * 10))
 
 png(paste0(filename, ".png"), res = 300, width = 15, height = 10,
@@ -484,7 +484,7 @@ ay_list <- setNames(
   all_ancestors
 )
 
-
+set.seed(0428)
 
 sim_results <- simulate_all_Y_interventions(
   fitted_list = fitted_list,
@@ -492,7 +492,7 @@ sim_results <- simulate_all_Y_interventions(
   dat         = dat,
   Y_vars      = all_ancestors,
   ay_list     = ay_list,
-  n           = 1e5                    # number of Monte Carlo samples
+  n           = 1e6                    # number of Monte Carlo samples
 )
 
 saveRDS(sim_results, file = "sim_results.rds", compress = TRUE)
