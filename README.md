@@ -28,8 +28,8 @@ The study investigates causal relationships among ecological factors, subsistenc
 │   ├── interventional_results_continuous_Y.csv   # Interventional results for continuous ancestors
 │   └── interventional_results_categorical_Y.csv  # Interventional results for categorical ancestors
 ├── figures/
-│   ├── BN_thr2.png                        # Learned BN graph (threshold = 0.2), PNG
-│   ├── BN_thr2.pdf                        # Learned BN graph (threshold = 0.2), PDF
+│   ├── BN_thr3.png                        # Learned BN graph (threshold = 0.2), PNG
+│   ├── BN_thr3.pdf                        # Learned BN graph (threshold = 0.2), PDF
 │   ├── barplot_subsistence.png            # Interventional effects on subsistence strategies
 │   ├── barplot_socialorg.png              # Interventional effects on community size, household org, and community org
 │   └── barplot_settlementtype.png         # Interventional effects on settlement type
@@ -60,9 +60,9 @@ After removing 18 cases with missing values and 1 case with an anomalous value (
 
 2. **Causal structure learning** — The `tpc` algorithm (from the R package `pcalg`) is applied to mixed continuous–categorical data using kernel-based independence tests and discrete likelihood-ratio tests (α = 0.05), with hierarchical blacklist constraints encoding established socio-ecological theory.
 
-3. **Bootstrap model averaging** — 1,000 bootstrap resamples (80% of cases, with replacement) are used to compute arc strength and direction probabilities. A consensus network is constructed by retaining arcs with strength ≥ 0.2.
+3. **Bootstrap model averaging** — 2,000 bootstrap resamples (80% of cases, with replacement) are used to compute arc strength and direction probabilities. A consensus network is constructed by retaining arcs with strength ≥ 0.2.
 
-4. **Interventional analysis** — Causal effects are estimated via stochastic forward simulation (100,000 Monte Carlo draws) from the fitted BN, implementing Pearl's do-calculus by severing incoming arcs to the intervened-upon variable. Results are summarized as interventional probability ratios comparing high vs. low levels of each ancestor variable.
+4. **Interventional analysis** — Causal effects are estimated via stochastic forward simulation (1,000,000 Monte Carlo draws) from the fitted BN, implementing Pearl's do-calculus by severing incoming arcs to the intervened-upon variable. Results are summarized as interventional probability ratios comparing high vs. low levels of each ancestor variable.
 
 ---
 
@@ -160,11 +160,11 @@ The script will:
 3. Learn the causal BN structure with bootstrap aggregation
 4. Save the BN graph to `figures/BN_thr2.png` and `figures/BN_thr2.pdf`
 5. Fit local conditional distributions
-6. Run interventional simulations (Monte Carlo, n = 100,000 per condition)
+6. Run interventional simulations (Monte Carlo, n = 1,000,000 per condition)
 7. Save results to `data/interventional_results_*.csv`
 8. Generate and display interventional probability ratio plots
 
-> **Note:** Bootstrap aggregation (1,000 resamples) and Monte Carlo simulation (n = 100,000) are computationally intensive. Total runtime is approximately **90–120 minutes** depending on hardware. The intermediate simulation object `sim_results.rds` is saved automatically; uncomment the `readRDS` line to reload it without re-running the simulation.
+> **Note:** Bootstrap aggregation (2,000 resamples) and Monte Carlo simulation (n = 1,000,000) are computationally intensive. Total runtime is approximately **90–120 minutes** depending on hardware. The intermediate simulation object `sim_results.rds` is saved automatically; uncomment the `readRDS` line to reload it without re-running the simulation.
 
 ---
 
