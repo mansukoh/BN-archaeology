@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="kor">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="generator" content="litedown 0.11">
+<title></title>
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+  padding: 1em;
+  line-height: 1.5;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+body, .abstract, code, .footnotes, footer, #refs, .caption { font-size: .9em; }
+li li { font-size: .95em; }
+ul:has(li > input[type="checkbox"]) { list-style: none; padding-left: 1em; }
+*, :before, :after { box-sizing: border-box; }
+a { color: steelblue; }
+pre, img { max-width: 100%; }
+pre { white-space: pre-wrap; word-break: break-word; }
+pre code { display: block; padding: 1em; overflow-x: auto; }
+code { font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace; }
+:not(pre, th) > code, code[class], div > .caption { background: #f8f8f8; }
+pre > code:is(:not([class]), .language-plain, .language-none, .plain), .box, .figure, .table { background: inherit; border: 1px solid #eee; }
+pre > code {
+  &.message { border-color: #9eeaf9; }
+  &.warning { background: #fff3cd; border-color: #fff3cd; }
+  &.error { background: #f8d7da; border-color: #f8d7da; }
+}
+.fenced-chunk { border-left: 1px solid #666; }
+.code-fence {
+  opacity: .4;
+  border: 1px dashed #666;
+  border-left: 2px solid;
+  &:hover { opacity: inherit; }
+}
+.box, .figure, .table, table { margin: 1em auto; }
+div > .caption { padding: 1px 1em; }
+.figure { p:has(img, svg), pre:has(svg) { text-align: center; } }
+.flex-col { display: flex; justify-content: space-between; }
+table {
+  &:only-child:not(.table > *) { margin: auto; }
+  th, td { padding: 5px; font-variant-numeric: tabular-nums; }
+  &:not([class]) {
+    thead, tfoot, tr:nth-child(even) { background: whitesmoke; }
+    thead th { border-bottom: 1px solid #ddd; }
+    border-top: 1px solid #666;
+    border-bottom: 1px solid #666;
+  }
+}
+blockquote {
+  color: #666;
+  margin: 0;
+  padding: 1px 1em;
+  border-left: .5em solid #eee;
+}
+hr, .footnotes::before { border: 1px dashed #ddd; }
+.frontmatter { text-align: center; }
+#TOC {
+  a { text-decoration: none; }
+  ul { list-style: none; padding-left: 1em; columns: 24em; }
+  & > ul { padding: 0; }
+  ul ul { border-left: 1px solid lightsteelblue; }
+}
+.body h2 { border-bottom: 1px solid #666; }
+.body .appendix, .appendix ~ h2 { border-bottom-style: dashed; }
+.main-number::after { content: "."; }
+span[class^="ref-number-"] { font-weight: bold; }
+.ref-number-fig::after, .ref-number-tab::after { content: ":"; }
+.cross-ref-chp::before { content: "Chapter "; }
+.cross-ref-sec::before { content: "Section "; }
+.cross-ref-apd::before { content: "Appendix "; }
+.cross-ref-fig::before, .ref-number-fig::before { content: "Figure "; }
+.cross-ref-tab::before, .ref-number-tab::before { content: "Table "; }
+.cross-ref-eqn::before, .MathJax_ref:has(mjx-mtext > mjx-c + mjx-c)::before { content: "Equation "; }
+.abstract, #refs {
+  &::before { display: block; margin: 1em auto; font-weight: bold; }
+}
+.abstract::before { content: "Abstract"; text-align: center; }
+#refs::before { content: "Bibliography"; font-size: 1.5em; }
+.ref-paren-open::before { content: "("; }
+.ref-paren-close::after { content: ")"; }
+.ref-semicolon::after { content: "; "; }
+.ref-and::after { content: " and "; }
+.ref-et-al::after { content: " et al."; font-style: italic; }
+.footnote-ref a {
+  &::before { content: "["; }
+  &::after { content: "]"; }
+}
+section.footnotes {
+  margin-top: 2em;
+  &::before { content: ""; display: block; max-width: 20em; }
+}
+.fade {
+  background: repeating-linear-gradient(135deg, white, white 30px, #ddd 32px, #ddd 32px);
+  opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  html, img, video, iframe { filter: invert(1); }
+  body { background: #ededed; }
+}
+@media print {
+  body { max-width: 100%; }
+  tr, img { break-inside: avoid; }
+}
+@media only screen and (min-width: 992px) {
+  body:not(.pagesjs) pre:has(.line-numbers):not(:hover) { white-space: pre; }
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xiee/utils@1.14.129/css/prism-xcode.min.css">
+</head>
+<body>
+<div class="frontmatter">
+</div>
+<div class="body">
+<h1 id="chp:causal-analysis-of-ecology-subsistence-composition-and-social-organization-in-trans-historical-small-scale-farming-societies-using-mixed-type-bayesian-networks">Causal analysis of ecology, subsistence composition, and social organization in trans-historical small-scale farming societies using mixed-type Bayesian networks</h1>
+<p><strong>Authors:</strong> Rosy Oh and Man-Suk Oh</p>
+<p>R code for learning a Bayesian network (BN) from mixed continuous/categorical cross-cultural data on 157 small-scale farming societies, and for quantifying interventional (causal) effects among three domains of variables: <strong>ecology</strong>, <strong>subsistence composition</strong>, and <strong>social organization</strong>.</p>
+<hr />
+<h2 id="sec:overview-of-the-pipeline">Overview of the pipeline</h2>
+<p>The main analysis is run from <code>main.rmd</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Section in <code>main.rmd</code></th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Read data and pre-process</td>
+<td>Read the data, merge <code>Camp</code> into <code>Hamlet</code>, convert categorical variables to factors</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Normalize and standardize</td>
+<td>Yeo-Johnson transformation (<code>bestNormalize</code>), then scaling to mean 0, SD 1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Blacklist</td>
+<td>Forbidden arcs from domain knowledge (see below)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Structure learning and arc selection</td>
+<td><code>tpc()</code> with the mixed-data CI test <code>mixCItest</code> on <code>B</code> bootstrap samples (each of size 80% of the data); arc strength and direction across bootstrap networks; arcs with strength ≥ <code>threshold</code> and direction ≥ 0.5 are kept</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Consensus DAG</td>
+<td>DAG built from the selected arcs (arcs that would create a cycle are skipped), and its plot</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Model fitting</td>
+<td>Continuous nodes: linear regression on parents (<code>lm</code>); discrete nodes: multinomial logistic regression (<code>nnet::multinom</code>)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Interventional analysis</td>
+<td>Monte Carlo simulation of the do-operator; interventional probabilities, ratios and 95% CIs</td>
+</tr>
+<tr>
+<td>8</td>
+<td>BIC</td>
+<td>Custom BIC for the hybrid DAG (no Conditional-Gaussian restriction)</td>
+</tr>
+</tbody>
+</table>
+<p>Sections 6–8 use the network stored in <code>avg_graph</code>: the consensus DAG from Section 5, or an alternative network from the sensitivity analysis (see below).</p>
+<h3 id="sec:variables">Variables</h3>
+<table>
+<thead>
+<tr>
+<th>Domain</th>
+<th>Variables</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ecology (5)</td>
+<td><code>DistanceCoast</code>, <code>Elevation</code>, <code>Slope</code>, <code>AnnualTemp</code>, <code>MonthlyPrecip</code></td>
+</tr>
+<tr>
+<td>Subsistence (4)</td>
+<td><code>Hunt_Agri</code>, <code>Animal_Agri</code>, <code>Fish_Agri</code>, <code>Gather_Agri</code>: additive log-ratio (ALR) of each subsistence share relative to agriculture</td>
+</tr>
+<tr>
+<td>Social organization (4)</td>
+<td><code>CommSize</code> (continuous); <code>SettlementType</code>, <code>CommOrg</code>, <code>HouseholdOrg</code> (categorical)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec:blacklist-domain-constraints">Blacklist (domain constraints)</h3>
+<ul>
+<li>Ecology is exogenous: no arcs from subsistence or social organization into ecology.</li>
+<li>Within ecology: Geography (<code>DistanceCoast</code>, <code>Elevation</code>) → Topography (<code>Slope</code>) → Climate (<code>AnnualTemp</code>, <code>MonthlyPrecip</code>); reverse arcs are forbidden. There is no arc between the two geographic variables, since neither causes the other.</li>
+<li>No arcs among subsistence variables. The ALR variables share the same reference category (agriculture), so dependence among them partly reflects the compositional constraint rather than causal relationships.</li>
+<li>Optional ordering between subsistence and social organization, set by <code>direction</code> (see Options).</li>
+</ul>
+<h3 id="sec:interventional-analysis">Interventional analysis</h3>
+<p>For each outcome X (subsistence and social-organization variables in the DAG) and each ancestor Y of X:</p>
+<ul>
+<li><strong>Continuous Y:</strong> compare do(Y ≤ median) with do(Y &gt; median). Values of Y are drawn from the observed data in the corresponding region, and all descendants of Y are re-simulated from the fitted local models (10⁶ Monte Carlo samples).
+<ul>
+<li>Continuous X: P(X &gt; median of X | do(Y))</li>
+<li>Categorical X: P(X = k | do(Y)) for each level k</li>
+<li>Ratio: P(· | do(Y &gt; median)) / P(· | do(Y ≤ median)), with a 95% CI from the delta method on the log scale</li>
+</ul>
+</li>
+<li><strong>Categorical Y:</strong> P(X | do(Y = k)) for each level k of Y.</li>
+<li>95% CIs for probabilities use the Wilson score interval.</li>
+</ul>
+<hr />
+<h2 id="sec:repository-structure">Repository structure</h2>
+<pre><code>.
+├── main.rmd                            # Main analysis (run this)
+├── main_disc.rmd                       # Supplementary: same pipeline on discretized data
+├── fn_normalize.R                      # Yeo-Johnson normalization
+├── fn_calculate_arc_strength.R         # Arc strength / direction from bootstrap networks
+├── fn_simulate_all_Y_interventions.R   # Monte Carlo simulation under do(Y)
+├── fn_interventional_analysis_ci.R     # Interventional probabilities, ratios, 95% CIs, result tables
+├── fn_plot_ratio.R                     # Bar charts of interventional results
+├── fn_comp_BIC.R                       # Custom BIC for mixed-data DAGs
+├── fn_sensitivity_analysis.R           # Sensitivity to arc orientation (script run between Sections 5 and 6)
+├── data/
+│   └── dat_score_ALR_agri_157.csv      # Input data (see Data)
+└── output/                             # Results are written here (create before running)
+</code></pre>
+<h3 id="sec:supplementary-analysis-discrete-bn-main-disc-rmd">Supplementary analysis: discrete BN (<code>main_disc.rmd</code>)</h3>
+<p><code>main_disc.rmd</code> repeats the pipeline after discretizing all 10 continuous variables (5 ecology, 4 ALR subsistence, <code>CommSize</code>), for comparison with the mixed-data analysis:</p>
+<ul>
+<li>Discretization (option <code>disc_method</code>): <code>&quot;median&quot;</code> (Low / High; ties at the median go to Low) or <code>&quot;tertile&quot;</code> (Low / Medium / High).</li>
+<li>Structure learning: <code>tpc()</code> with the G-square test <code>disCItest</code>; same blacklist, bootstrap scheme, <code>alpha</code> and arc-selection rule as <code>main.rmd</code>.</li>
+<li>Local models: empirical marginal distribution for root nodes, multinomial logistic regression for all other nodes.</li>
+<li>Interventional analysis: P(X = k | do(Y = j)) with 95% CIs for every level of every ancestor Y (no ratios, since there are no continuous interventions).</li>
+<li>Output file names contain <code>disc_&lt;disc_method&gt;_&lt;direction&gt;_thr&lt;k&gt;</code>, so they do not overwrite the results of <code>main.rmd</code>. Bar charts are not produced.</li>
+<li>Its BIC is not comparable with that of <code>main.rmd</code>, because the data differ.</li>
+</ul>
+<h2 id="sec:data">Data</h2>
+<p><code>data/dat_score_ALR_agri_157.csv</code> has one row per society (157 societies) and 14 columns, in this order:</p>
+<ol>
+<li>Society ID (dropped in the script)</li>
+<li>5 ecology variables</li>
+<li>4 subsistence variables (ALR-transformed)</li>
+<li>4 social-organization variables</li>
+</ol>
+<p>The script selects variables by column position, so the column order must be kept.</p>
+<p>The data are based on Palacios et al. (2022), with ecological variables taken from D-PLACE.</p>
+<h2 id="sec:requirements">Requirements</h2>
+<ul>
+<li>R (≥ 4.2 recommended)</li>
+<li>Bioconductor: <code>graph</code>, <code>RBGL</code>, <code>Rgraphviz</code></li>
+<li>CRAN: <code>pcalg</code>, <code>bnlearn</code>, <code>micd</code>, <code>tpc</code>, <code>nnet</code>, <code>igraph</code>, <code>dplyr</code>, <code>tidyverse</code>, <code>GGally</code>, <code>readxl</code>, <code>httr</code>, <code>bestNormalize</code>, <code>ggplot2</code>, <code>gridExtra</code></li>
+</ul>
+<p>The first chunk of <code>main.rmd</code> installs any missing Bioconductor and CRAN packages. <code>bestNormalize</code> is installed by <code>fn_normalize.R</code> if needed; <code>gridExtra</code> may need to be installed separately:</p>
+<pre><code class="language-r">install.packages(&quot;gridExtra&quot;)
+</code></pre>
+<h2 id="sec:how-to-run">How to run</h2>
+<ol>
+<li>Clone the repository and open it as the working directory (e.g. an RStudio project).</li>
+<li>Put the data file in <code>data/</code> and create an empty <code>output/</code> folder.</li>
+<li>Set the options at the top of Section 1 in <code>main.rmd</code>.</li>
+<li>Run the R chunks in order (or knit the file).</li>
+</ol>
+<h3 id="sec:options">Options</h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value used</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>direction</code></td>
+<td><code>&quot;none&quot;</code></td>
+<td>Ordering between subsistence and social organization: <code>&quot;none&quot;</code> (no constraint), <code>&quot;sub_to_soc&quot;</code> (subsistence → social organization only), <code>&quot;soc_to_sub&quot;</code> (social organization → subsistence only), or other user-defined constraints, which must be specified in Section 3 (Blacklist).</td>
+</tr>
+<tr>
+<td><code>threshold</code></td>
+<td><code>0.3</code></td>
+<td>Minimum arc strength for the consensus DAG</td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td><code>10000</code></td>
+<td>Number of bootstrap replicates (a smaller value, e.g. 100, runs faster for testing)</td>
+</tr>
+</tbody>
+</table>
+<p>Other fixed settings: CI-test significance level <code>alpha = 0.1</code>; direction cutoff 0.5 for arc selection (arcs with direction &lt; 0.6 are drawn dashed); 10⁶ Monte Carlo samples per intervention; random seeds <code>2374</code> (bootstrap) and <code>0428</code> (simulation).</p>
+<p>To compare the scenarios, run <code>main.rmd</code> once for each value of <code>direction</code> and compare the BIC files (lower is better).</p>
+<h3 id="sec:sensitivity-to-arc-orientation-fn-sensitivity-analysis-r">Sensitivity to arc orientation (<code>fn_sensitivity_analysis.R</code>)</h3>
+<p>Arcs of the consensus DAG whose direction probability is below 0.6 are treated as having uncertain directions. Alternative networks are built by reversing these arcs in every combination, keeping all other arcs unchanged. Each network is then fitted, its interventional effects re-estimated, and the networks compared by BIC.</p>
+<p>With the settings used in the paper (<code>direction = &quot;none&quot;</code>, <code>threshold = 0.3</code>), two arcs are uncertain (<code>Gather_Agri</code> → <code>CommSize</code>, direction 0.51; <code>CommSize</code> → <code>Hunt_Agri</code>, direction 0.56), giving four networks:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Network</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M0</td>
+<td>Consensus DAG (directions learned from the data)</td>
+</tr>
+<tr>
+<td>M1</td>
+<td><code>Gather_Agri</code> → <code>CommSize</code> reversed</td>
+</tr>
+<tr>
+<td>M2</td>
+<td><code>CommSize</code> → <code>Hunt_Agri</code> reversed</td>
+</tr>
+<tr>
+<td>M3</td>
+<td>Both arcs reversed</td>
+</tr>
+</tbody>
+</table>
+<p><code>fn_sensitivity_analysis.R</code> is a script (it defines no function) that uses objects created by <code>main.rmd</code>. For each model:</p>
+<ol>
+<li>Run Sections 1–5 of <code>main.rmd</code> (once; the bootstrap does not need to be repeated for each model).</li>
+<li>Set <code>sens_model</code> in <code>fn_sensitivity_analysis.R</code> to <code>&quot;M0&quot;</code>, <code>&quot;M1&quot;</code>, <code>&quot;M2&quot;</code> or <code>&quot;M3&quot;</code>, and run the script, e.g. <code>source(&quot;fn_sensitivity_analysis.R&quot;)</code>. It
+<ul>
+<li>takes the consensus DAG saved in Section 5 (e.g. <code>avg_graph_none</code>),</li>
+<li>lists the arcs with direction probability &lt; 0.6 (<code>uncertain_arcs</code>),</li>
+<li>reverses the arcs for the chosen model, checks that the result is a DAG, and stores it in <code>avg_graph</code>,</li>
+<li>sets <code>out_label</code> (e.g. <code>none_M1</code>) for the output file names.</li>
+</ul>
+</li>
+<li>Run Sections 6–8 of <code>main.rmd</code>.</li>
+</ol>
+<p>Repeat steps 2–3 for M0–M3 and compare the files <code>BIC_&lt;label&gt;_thr3.csv</code> (lower is better).</p>
+<p>The two arcs to reverse are written in the script. If <code>threshold</code> or the data change, check <code>uncertain_arcs</code> and edit the arc names in Step 3-1 of the script.</p>
+<h2 id="sec:output-in-output">Output (in <code>output/</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>arc_strength_&lt;direction&gt;_thr&lt;k&gt;.csv</code></td>
+<td>Strength and direction of every arc observed in the bootstrap networks</td>
+</tr>
+<tr>
+<td><code>selected_arcs_&lt;direction&gt;_thr&lt;k&gt;.csv</code></td>
+<td>Arcs in the consensus DAG</td>
+</tr>
+<tr>
+<td><code>BN_&lt;direction&gt;_thr&lt;k&gt;.tif / .png / .pdf</code></td>
+<td>Plot of the consensus DAG</td>
+</tr>
+<tr>
+<td><code>intervention_conti_Y_thr&lt;k&gt;_&lt;label&gt;.csv</code></td>
+<td>Results for continuous interventions (probabilities, difference, ratio, 95% CIs)</td>
+</tr>
+<tr>
+<td><code>intervention_cat_Y_thr&lt;k&gt;_&lt;label&gt;.csv</code></td>
+<td>Results for categorical interventions, P(X | do(Y = k)) with 95% CIs</td>
+</tr>
+<tr>
+<td><code>barplot_&lt;X&gt;_&lt;label&gt;.pdf / .png</code></td>
+<td>Interventional probability ratios for outcome X</td>
+</tr>
+<tr>
+<td><code>barplot_&lt;X&gt;_HouseholdOrg.pdf / .png</code></td>
+<td>P(X | do(HouseholdOrg = k))</td>
+</tr>
+<tr>
+<td><code>BIC_&lt;label&gt;_thr&lt;k&gt;.csv</code></td>
+<td>Log-likelihood, number of parameters and BIC of the network used in Sections 6–7 (compare across M0–M3 for the sensitivity analysis)</td>
+</tr>
+</tbody>
+</table>
+<p><code>&lt;k&gt;</code> = 10 × <code>threshold</code> (e.g. <code>thr3</code> for 0.3). <code>&lt;label&gt;</code> = <code>out_label</code>: <code>&lt;direction&gt;</code> for the consensus DAG (M0) and <code>&lt;direction&gt;_&lt;model&gt;</code> for the alternative networks (e.g. <code>none_M1</code>).</p>
+<p>The <code>barplot_&lt;X&gt;_HouseholdOrg</code> files do not include the model label, so each run overwrites them. In the paper these effects are identical across M0–M3.</p>
+<h2 id="sec:notes">Notes</h2>
+<ul>
+<li>With <code>B = 10000</code>, structure learning takes a long time. Save intermediate objects with the <code>saveRDS()</code> lines in <code>main.rmd</code> (commented out) so later sections can be rerun without repeating the bootstrap.</li>
+<li>The custom BIC follows the convention <em>lower is better</em>, the opposite of <code>bnlearn::score()</code>.</li>
+</ul>
+<h2 id="sec:citation">Citation</h2>
+<p>If you use this code, please cite:</p>
+<blockquote>
+<p>Oh, R. and Oh, M.-S. Causal analysis of ecology, subsistence composition, and social organization in trans-historical small-scale farming societies using mixed-type Bayesian networks. (Submitted for publication.)</p>
+</blockquote>
+<h2 id="sec:contact">Contact</h2>
+<p>Rosy Oh, Department of Mathematics, Korea Military Academy (<a href="mailto:rosy.oh5@gmail.com">rosy.oh5@gmail.com</a>)<br />
+Man-Suk Oh, Department of Statistics, Ewha Womans University (<a href="mailto:msoh@ewha.ac.kr">msoh@ewha.ac.kr</a>)</p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+</body>
+</html>
