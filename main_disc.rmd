@@ -1,0 +1,436 @@
+
+#======================================================================================================
+Causal analysis of ecology, subsistence composition, and social organization in trans-historical small-scale farming societies using mixed-type Bayesian networks
+
+## Supplementary analysis: discrete Bayesian network
+## All continuous variables are discretized (median split or tertiles)
+
+Rosy Oh and Man-Suk Oh
+
+
+Oct 26, 2026
+
+#======================================================================================================
+
+Variant of main.rmd in which all continuous variables (5 ecology, 4 ALR subsistence
+variables, CommSize) are discretized, so that every node is categorical and a discrete BN
+is learned with the G-square CI test (disCItest) instead of mixCItest.
+
+Pipeline
+  1. Read data and pre-process
+  2. Discretize continuous variables (median split or tertiles)
+  3. Build the blacklist (same as main.rmd)
+  4. Learn BN structures on bootstrap samples with tpc() + disCItest;
+     Arc strength / direction; select arcs
+  5. build the consensus DAG
+  6. Fit local models (multinomial logistic regression for every node)
+  7. Interventional analysis: P(X = k | do(Y = j)) via Monte Carlo simulation
+  8. BIC of the consensus DAG
+
+Required folders: data/ (input csv) and output/ (results). Run from the repository root.
+Output file names contain "disc_<disc_method>" so that results of main.rmd are not overwritten.
+
+
+
+# Install packages (installs only packages that are missing)
+```{r}
+# ── Bioconductor packages (not available on CRAN) ──────────────────────────────
+bioc_req <- c("graph", "RBGL", "Rgraphviz")
+bioc_missing <- setdiff(bioc_req, rownames(installed.packages()))
+
+if (length(bioc_missing) > 0) {
+  if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+
+  options(BioC_mirror = "https://bioconductor.posit.co")
+  options(repos = BiocManager::repositories())
+
+  BiocManager::install(bioc_missing)
+}
+
+# ── CRAN packages ───────────────────────────────────────────────────────────
+cran_req <- c(
+  "pcalg",    # PC algorithm-based causal discovery; disCItest (G-square test)
+  "bnlearn",  # Bayesian network learning
+  "tpc",      # tpc() algorithm
+  "nnet",     # multinom(): multinomial logistic regression
+  "dplyr",
+  "tidyverse"
+)
+cran_missing <- setdiff(cran_req, rownames(installed.packages()))
+if (length(cran_missing) > 0)
+  install.packages(cran_missing, repos = "https://cloud.r-project.org")
+```
+
+
+
+# 0. Load packages
+```{r}
+suppressPackageStartupMessages({
+  library(pcalg)
+  library(Rgraphviz)
+  library(bnlearn)
+  library(tpc)
+  library(nnet)
+  library(dplyr)
+  library(tidyverse)
+})
+```
+
+
+
+# 1. Read data and pre-process
+```{r}
+
+# ── Analysis options ─────────────────────────────────────────────────────────
+# disc_method : discretization of continuous variables
+#               "median"  two categories (Low / High), split at the median
+#               "tertile" three categories (Low / Medium / High), split at tertiles
+# direction   : blacklist scenario
+#               "none"        no ordering between Subsistence and SocialOrg
+#               "sub_to_soc"  Subsistence -> SocialOrg only
+#               "soc_to_sub"  SocialOrg -> Subsistence only
+# threshold   : minimum arc strength for the consensus DAG
+# B           : number of bootstrap replicates
+disc_method = "median"
+direction   = "none"
+threshold   = 0.3
+B           = 10000
+
+# Label used in output file names, e.g. "disc_median_none_thr3"
+tag <- paste0("disc_", disc_method, "_", direction, "_thr", as.integer(threshold * 10))
+
+
+# Input data: first column = society ID, then 5 Ecology, 4 Subsistence and
+# 4 SocialOrg variables (in this order)
+dat.score=read.csv("data/dat_score_ALR_agri_157.csv",  header = TRUE)
+
+names(dat.score)
+dat.score=dat.score[, -1, drop=F]  # drop the Society ID column
+Ecology=names(dat.score)[1:5]
+Subsistence=names(dat.score)[6:9]
+SocialOrg=names(dat.score)[10:13]
+
+
+# Merge the "Camp" settlement type into "Hamlet"
+dat.score$SettlementType[dat.score$SettlementType == "Camp"] <- "Hamlet"
+dat.score$SettlementType <- factor(dat.score$SettlementType)
+
+# Categorical social organization variables as factors
+SocialOrg_categorical <- c("SettlementType", "CommOrg", "HouseholdOrg")
+dat.score[SocialOrg_categorical] <- lapply(dat.score[SocialOrg_categorical], factor)
+
+```
+
+
+
+# 2. Discretize all continuous variables
+```{r}
+# Continuous variables: 5 ecology, 4 ALR subsistence, CommSize (10 in total)
+cont_vars <- names(dat.score)[sapply(dat.score, is.numeric)]
+print(cont_vars)
+
+# Median split: values above the median -> "High"; ties at the median -> "Low"
+dichotomize_median <- function(x) {
+  m <- median(x, na.rm = TRUE)
+  factor(ifelse(x > m, "High", "Low"), levels = c("Low", "High"))
+}
+
+# Tertile split: Low / Medium / High
+# (fewer categories, with a warning, if tertile cutoffs are tied)
+tertile_cut <- function(x) {
+  br <- quantile(x, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE, type = 7)
+  if (any(duplicated(br))) {
+    warning("Tied tertile cutoffs; fewer than 3 categories: ", paste(round(br, 3), collapse = ", "))
+    br <- unique(br)
+  }
+  labs <- c("Low", "Medium", "High")[seq_len(length(br) - 1)]
+  cut(x, breaks = br, labels = labs, include.lowest = TRUE, right = TRUE)
+}
+
+disc_fun <- if (disc_method == "median") dichotomize_median else tertile_cut
+
+dat.trans <- dat.score
+dat.trans[cont_vars] <- lapply(dat.score[cont_vars], disc_fun)
+
+# Check category sizes and the number of ties at the median
+sapply(dat.trans[cont_vars], table)
+sapply(dat.score[cont_vars], function(x) sum(x == median(x)))
+
+# All variables must now be factors
+stopifnot(all(sapply(dat.trans, is.factor)))
+
+```
+
+
+
+# 3. Blacklist (forbidden arcs) — same constraints as main.rmd
+```{r}
+
+# forb_all[a, b] = TRUE forbids the arc a -> b
+# (scenario set by `direction` in Section 1)
+
+forb_all <- matrix(
+  FALSE,
+  nrow = ncol(dat.trans),
+  ncol = ncol(dat.trans),
+  dimnames = list(names(dat.trans), names(dat.trans))
+)
+
+# Ecology is exogenous: no arcs from Subsistence or SocialOrg into Ecology
+forb_all[Subsistence, Ecology] <- TRUE
+forb_all[SocialOrg, Ecology] <- TRUE
+
+# Scenario-specific constraints between Subsistence and SocialOrg
+if( direction == "sub_to_soc"){
+   forb_all[SocialOrg, Subsistence] <- TRUE
+} else if ( direction == "soc_to_sub"){
+   forb_all[Subsistence, SocialOrg] <- TRUE
+}
+# if direction == "none" : no constraints
+
+
+# No arcs among subsistence variables: avoid spurious arcs induced by the common ALR reference (Agriculture)
+forb_all[Subsistence, Subsistence] <- TRUE
+
+
+diag(forb_all) <- FALSE
+
+# Ecology hierarchy:
+# Geography -> Topography -> Climate
+Geography  <- c("DistanceCoast", "Elevation")
+Topography <- "Slope"
+Climate    <- c("AnnualTemp", "MonthlyPrecip")
+
+# No arc between the two geographic variables (both directions forbidden):
+# DistanceCoast and Elevation are both exogenous features of location, and
+# neither causes the other.
+forb_all["DistanceCoast", "Elevation"] <- TRUE
+forb_all["Elevation", "DistanceCoast"] <- TRUE
+
+# Forbid reverse directions within the hierarchy
+forb_all[Topography, Geography] <- TRUE
+forb_all[Climate, Geography] <- TRUE
+forb_all[Climate, Topography] <- TRUE
+
+# Arrange data and blacklist in exactly the same variable order
+cols <- c(Ecology, SocialOrg, Subsistence)
+
+dat <- dat.trans %>%   select(all_of(cols))
+
+forb <- forb_all[cols, cols]
+
+stopifnot(
+  identical(names(dat), rownames(forb)),
+  identical(names(dat), colnames(forb))
+)
+
+```
+
+
+
+# 4. Learn BN structure on bootstrap samples; arc strength and arc selection
+```{r}
+
+# Fit a single discrete BN to one bootstrap sample with tpc()
+# disCItest (G-square test) requires
+#   dm   : integer matrix with categories coded 0, 1, ..., nlev - 1
+#   nlev : number of levels of each variable (taken from the factor levels, so
+#          that a level absent from a bootstrap sample is still counted)
+fit_one <- function(dat_sub, forb, alpha_level, numCores) {
+
+  dm   <- as.matrix(dat_sub %>% mutate(across(everything(), ~ as.integer(.x) - 1L)))
+  nlev <- sapply(dat_sub, nlevels)
+
+  fit <- tpc(
+    suffStat    = list(dm = dm, nlev = nlev, adaptDF = FALSE),
+    indepTest   = disCItest,      # G-square CI test for discrete data
+    labels      = names(dat_sub),
+    alpha       = alpha_level,    # significance level of the CI tests
+    forbEdges   = forb,           # blacklist matrix (domain constraints)
+    maj.rule    = TRUE,           # majority rule for edge orientation
+    skel.method = "stable",
+    numCores    = 1
+  )
+  return(fit)
+}
+
+# ── Bootstrap settings ───────────────────────────────────────────────────────
+set.seed(2374)
+
+#B  : number of bootstrap replicates (set in Section 1)
+p   <- ncol(dat)
+vn  <- names(dat)
+
+# Storage: only DAGs that convert without cycles are kept
+boot_nets        <- list()
+successful_boots <- 0
+skipped_boots    <- c()     # indices of replicates that failed conversion (e.g. cycles)
+
+# ── Main bootstrap loop ──────────────────────────────────────────────────────
+t0 <- Sys.time()
+
+for (b in 1:B) {
+
+  # Resample 80% of the observations (sampling with replacement)
+  idx <- sample.int(
+    nrow(dat),
+    size = floor(0.8 * nrow(dat)),
+    replace = TRUE
+  )
+
+  # Suppress warnings from sparse contingency tables in disCItest()
+  fit <- suppressWarnings(
+    fit_one(dat[idx, , drop = FALSE],
+            forb = forb,
+            alpha_level = 0.1     )
+  )
+
+  # Convert to a bnlearn "bn" object; skip the replicate if it contains a cycle
+  tryCatch({
+    g <- as.bn(fit, check.cycles = TRUE)
+    successful_boots <- successful_boots + 1
+    boot_nets[[successful_boots]] <- g
+  }, error = function(e) {
+    cat("Bootstrap", b, "conversion failed:",
+        conditionMessage(e), "\n")
+    skipped_boots <<- c(skipped_boots, b)
+  })
+
+}
+cat("Finished bootstrap:", b,
+    "Elapsed:",
+    round(as.numeric(difftime(Sys.time(), t0,
+                              units = "secs")), 1),
+    "seconds\n")
+flush.console()
+
+cat(sprintf("Completed: %d/%d replicates accepted (%d skipped)\n",
+            successful_boots, B, length(skipped_boots)))
+
+# ── Arc strength and direction (fn_calculate_arc_strength.R) ────────────────
+source("fn_calculate_arc_strength.R")
+arc_strength <- calculate_arc_strength(boot_nets, vn)
+
+summary(arc_strength$strength) # strength and direction are both in [0, 1]
+
+
+# ── Arc selection ────────────────────────────────────────────────────────────
+# Keep arcs with strength >= threshold and direction >= 0.5
+selected_arcs <- arc_strength[
+  arc_strength$strength  >= threshold &
+    arc_strength$direction >= 0.5, ]
+print(selected_arcs)
+
+n_arcs <- nrow(selected_arcs);n_arcs
+
+
+# Save selected arcs and all arc strengths
+write.csv(selected_arcs, paste0("output/disc_selected_arcs_", tag, ".csv"), row.names = FALSE)
+write.csv(arc_strength,  paste0("output/disc_arc_strength_",  tag, ".csv"), row.names = FALSE)
+```
+
+
+
+# 5. Construct the consensus DAG from the selected arcs
+```{r}
+
+# Start from an empty graph on all nodes
+avg_graph <- empty.graph(vn)
+
+# Add selected arcs one by one, skipping any that would create a cycle
+for (k in 1:nrow(selected_arcs)) {
+  test_graph <- set.arc(avg_graph,
+                        from         = as.character(selected_arcs$from[k]),
+                        to           = as.character(selected_arcs$to[k]),
+                        check.cycles = FALSE)
+
+  if (acyclic(test_graph, directed = TRUE)) {
+    avg_graph <- test_graph
+  } else {
+    message("Skipped arc: ", selected_arcs$from[k], " -> ",
+            selected_arcs$to[k], " (would create cycle)")
+  }
+}
+
+# Remove isolated nodes (keep only nodes involved in at least one arc)
+connected_nodes <- unique(c(arcs(avg_graph)[, "from"], arcs(avg_graph)[, "to"]))
+avg_graph <- bnlearn::subgraph(avg_graph, connected_nodes)
+cat("Number of arcs in consensus DAG:", narcs(avg_graph), "\n")
+
+
+# Keep a copy named by method and scenario, e.g. avg_graph_disc_median_none_thr3
+assign(paste0("avg_graph_", tag), avg_graph)
+
+# Label for output files of Sections 7-8 (changed by fn_sensitivity_analysis.R for M1-M3)
+out_label <- direction
+
+
+# Save / reload the consensus DAG (uncomment as needed)
+#fname=paste0("avg_graph_", tag, ".rds")
+#saveRDS(avg_graph, file =fname, compress = TRUE)
+#avg_graph <- readRDS(fname)
+
+
+# ── Plot the consensus DAG ───────────────────────────────────────────────────
+
+gR <- graphviz.plot(avg_graph, shape = "rectangle")
+
+# ── Node appearance ──────────────────────────────────────────────────────────
+node.attrs <- nodeRenderInfo(gR)
+arc.attrs  <- edgeRenderInfo(gR)
+
+# Global node style
+node.attrs$col     <- "black"
+node.attrs$textCol <- "black"
+node.attrs$fontsize <- 14
+
+# Node fill colours by variable group
+node.attrs$fill[c(Geography, Topography)] <- "lightgray"    # geography and topography
+node.attrs$fill[Climate]                  <- "lightyellow"  # climate
+node.attrs$fill[Subsistence]              <- "lightgreen"   # subsistence strategies
+node.attrs$fill[SocialOrg]                <- "lightblue"    # social organisation
+
+nodeRenderInfo(gR) <- node.attrs
+
+# ── Arc appearance ───────────────────────────────────────────────────────────
+# Arcs with direction < 0.60: dashed (weak directional consensus)
+# Arcs with direction >= 0.60: solid  (strong directional consensus)
+all_arc_names <- names(arc.attrs$lty)
+
+for (k in 1:nrow(selected_arcs)) {
+  arc_name <- paste0(selected_arcs$from[k], "~", selected_arcs$to[k])
+
+  if (arc_name %in% all_arc_names) {
+    arc.attrs$col[arc_name] <- "black"
+    arc.attrs$lwd[arc_name] <- 2
+    arc.attrs$lty[arc_name] <- ifelse(selected_arcs$direction[k] < 0.6,
+                                      "dashed", "solid")
+    arc.attrs$fontsize[arc_name] <- 10
+  }
+}
+
+edgeRenderInfo(gR) <- arc.attrs
+renderGraph(gR)
+
+
+# ── Save plots (TIFF, PNG, PDF) ──────────────────────────────────────────────
+filename <- paste0("output/BN_", tag)
+
+tiff(paste0(filename, ".tif"), res = 300, width = 15, height = 10,
+     units = "cm", compression = "lzw", bg = "white", type = "cairo")
+renderGraph(gR)
+dev.off()
+
+png(paste0(filename, ".png"), res = 300, width = 15, height = 10,
+    units = "cm", bg = "transparent")
+renderGraph(gR)
+dev.off()
+
+pdf(paste0(filename, ".pdf"))
+renderGraph(gR)
+dev.off()
+```
+
+
+
+
